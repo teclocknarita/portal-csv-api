@@ -58,24 +58,27 @@ def draft(payload: dict):
 
             src_lower = src.lower()
 
-            # 不要そうな画像を除外
-            exclude_keywords = [
-                "logo",
-                "icon",
-                "svg",
-                "banner",
-                "loading",
-                "spacer",
-                "blank",
-            ]
-            if any(keyword in src_lower for keyword in exclude_keywords):
+            # ❌ 完全除外
+            if (
+                "logo" in src_lower
+                or "icon" in src_lower
+                or "svg" in src_lower
+                or "banner" in src_lower
+                or "loading" in src_lower
+                or "spacer" in src_lower
+                or "blank" in src_lower
+            ):
                 continue
 
-            # data:image は除外
+            # ❌ 拡張子で除外（これ重要）
+            if src_lower.endswith(".svg"):
+                continue
+
+            # ❌ data:image除外
             if src.startswith("data:"):
                 continue
 
-            # 相対パスを絶対URL化
+            # 相対パス処理
             if src.startswith("//"):
                 src = "https:" + src
             elif src.startswith("/"):
