@@ -1,25 +1,51 @@
-imgs = soup.find_all("img")
+import requests
+from bs4 import BeautifulSoup
+from fastapi import FastAPI
 
-image_urls = []
+app = FastAPI(
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
+)
 
-for img in imgs:
-    src = img.get("src")
+@app.get("/")
+def root():
+    return {"message": "ok"}
 
-    if not src:
-        continue
 
-    # 小さい画像・アイコン除外
-    if "logo" in src or "icon" in src or "svg" in src:
-        continue
+@app.post("/draft")
+def draft(payload: dict):
+    url = payload.get("url")
 
-    # 相対パス対応
-    if src.startswith("/"):
-        src = url.rstrip("/") + src
+    try:
+        html = requests.get(url).text
+        soup = BeautifulSoup(html, "html.parser")
 
-    image_urls.append(src)
+        # タイトル
+        title = soup.title.string if soup.title else "不明"
 
-# 上位3枚だけ使う
-top_images = [
-    {"slot": i+1, "category": "外観", "image_url": img}
-    for i, img in enumerate(image_urls[:3])
-]
+        # 👇 画像1枚だけ取得（最初のimg）
+        img_tag = soup.find("img")
+        img_url = img_tag["src"] if img_tag and img_tag.get("src") else None
+
+    except Exception as e:
+        return {
+            "clinic_name": "取得失敗",
+            "warnings": [str(e)]
+        }
+
+    return {
+        "clinic_name": title,
+        "top_images": [
+            {
+                "slot": 1,
+                "category": "外観",
+                "image_url": img_url
+            }
+        ] if img_url else [],
+        "points": [],
+        "director": {"name": "", "image_url": None},
+        "staff": [],
+        "features": [],
+        "warnings": []
+    }
