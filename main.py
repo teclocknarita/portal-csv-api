@@ -21,8 +21,12 @@ def draft(payload: dict):
         html = requests.get(url).text
         soup = BeautifulSoup(html, "html.parser")
 
-        # タイトル取得
-        title = soup.title.string if soup.title else "タイトル不明"
+        # タイトル
+        title = soup.title.string if soup.title else "不明"
+
+        # 👇 画像1枚だけ取得（最初のimg）
+        img_tag = soup.find("img")
+        img_url = img_tag["src"] if img_tag and img_tag.get("src") else None
 
     except Exception as e:
         return {
@@ -32,7 +36,13 @@ def draft(payload: dict):
 
     return {
         "clinic_name": title,
-        "top_images": [],
+        "top_images": [
+            {
+                "slot": 1,
+                "category": "外観",
+                "image_url": img_url
+            }
+        ] if img_url else [],
         "points": [],
         "director": {"name": "", "image_url": None},
         "staff": [],
