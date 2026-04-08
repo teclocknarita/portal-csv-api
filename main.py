@@ -38,27 +38,34 @@ def draft(payload: dict):
             )
         }
 
-        response = requests.get(url, headers=headers, timeout=15)
-        response.raise_for_status()
+        res = requests.get(url, headers=headers, timeout=15)
+        res.raise_for_status()
 
-        soup = BeautifulSoup(response.text, "html.parser")
+        soup = BeautifulSoup(res.text, "html.parser")
 
-        # タイトル取得
-        title = soup.title.string.strip() if soup.title and soup.title.string else "不明"
+        # -------------------------
+        # 医院名取得（title + h1）
+        # -------------------------
+        title = soup.title.string.strip() if soup.title and soup.title.string else ""
+        h1 = soup.find("h1")
+        clinic_name = h1.text.strip() if h1 and h1.text else title or "不明"
 
-        # 画像抽出
+        # -------------------------
+        # 画像取得
+        # -------------------------
         imgs = soup.find_all("img")
         image_urls = []
 
         for img in imgs:
             src = img.get("src")
+            alt = img.get("alt", "").lower()
 
             if not src:
                 continue
 
             src_lower = src.lower()
 
-            # ❌ 完全除外
+            # ❌ 除外条件
             if (
                 "logo" in src_lower
                 or "icon" in src_lower
@@ -70,55 +77,80 @@ def draft(payload: dict):
             ):
                 continue
 
-            # ❌ 拡張子で除外（これ重要）
             if src_lower.endswith(".svg"):
                 continue
 
-            # ❌ data:image除外
             if src.startswith("data:"):
                 continue
 
-            # 相対パス処理
+            # 相対URL対応
             if src.startswith("//"):
                 src = "https:" + src
             elif src.startswith("/"):
                 src = url.rstrip("/") + src
-            elif src.startswith("./"):
-                src = url.rstrip("/") + "/" + src.lstrip("./")
             elif not src.startswith("http"):
                 src = url.rstrip("/") + "/" + src.lstrip("/")
 
-            # 重複除外
             if src not in image_urls:
-                image_urls.append(src)
+                image_urls.append((src, alt))
 
-        # 上位3枚をTOP画像にする
-        top_images = [
-            {
+        # -------------------------
+        # 画像分類（ここが重要）
+        # -------------------------
+        top_images = []
+
+        for i, (img_url, alt) in enumerate(image_urls[:6]):
+
+            url_lower = img_url.lower()
+            alt_lower = alt.lower()
+
+            # 👇 意味ベース分類
+            if any(k in url_lower or k in alt_lower for k in ["staff", "doctor", "院長", "スタッフ"]):
+                category = "スタッフ"
+
+            elif any(k in url_lower or k in alt_lower for k in ["microscope", "equipment", "機器", "設備"]):
+                category = "設備"
+
+            elif any(k in url_lower or k in alt_lower for k in ["room", "clinic", "院内", "待合"]):
+                category = "院内"
+
+            elif any(k in url_lower or k in alt_lower for k in ["外観", "building"]):
+                category = "外観"
+
+            else:
+                # fallback（順番）
+                if i == 0:
+                    category = "外観"
+                elif i == 1:
+                    category = "院内"
+                else:
+                    category = "設備"
+
+            top_images.append({
                 "slot": i + 1,
-                "category": "外観",
+                "category": category,
                 "image_url": img_url
-            }
-            for i, img_url in enumerate(image_urls[:3])
-        ]
+            })
 
+        # -------------------------
+        # 警告
+        # -------------------------
         warnings = []
+
         if not top_images:
-            warnings.append("TOP画像を取得できませんでした")
+            warnings.append("画像を取得できませんでした")
+
         warnings.extend([
             "ポイント・特徴の情報が不足しています",
             "スタッフ情報が限定的です",
-            "TOP画像・各画像が仮分類のため差し替えが必要です"
+            "画像分類は自動判定のため確認が必要です"
         ])
 
         return {
-            "clinic_name": title,
+            "clinic_name": clinic_name,
             "top_images": top_images,
             "points": [],
-            "director": {
-                "name": "",
-                "image_url": None
-            },
+            "director": {"name": "", "image_url": None},
             "staff": [],
             "features": [],
             "warnings": warnings
@@ -141,5 +173,5 @@ def generate_csv(payload: dict):
     return {
         "csv_file_url": "https://example.com/sample.csv",
         "xlsx_file_url": "https://example.com/sample.xlsx",
-        "warnings": ["CSV生成はまだダミーです"]
+        "warnings": ["CSV生成は未実装です"]
     }
